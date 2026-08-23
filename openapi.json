@@ -1,0 +1,333 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PagePith API",
+    "version": "0.1.0",
+    "description": "Turn any web page into clean, structured content. The API handles JavaScript-rendered sites, PDFs, and most bot-protected pages, returning readable markdown. Authenticate with your API key as a Bearer token. Usage is billed per successful scrape."
+  },
+  "servers": [{ "url": "https://api.pagepith.com", "description": "Production" }],
+  "security": [{ "bearerAuth": [] }],
+  "tags": [
+    { "name": "Scrape", "description": "Fetch and convert web pages" },
+    { "name": "Monitoring", "description": "Watch public pages for content changes" }
+  ],
+  "paths": {
+    "/v1/api/scrape": {
+      "post": {
+        "tags": ["Scrape"],
+        "summary": "Scrape a URL (synchronous)",
+        "description": "Fetch a page and return its content. Best for low-latency lookups where the caller can wait a few seconds. Each successful scrape is billed once.",
+        "operationId": "scrapeSync",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ScrapeRequest" },
+              "example": { "url": "https://example.com" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The scraped page.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ScrapeResult" } } }
+          },
+          "400": { "$ref": "#/components/responses/InvalidRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "402": { "$ref": "#/components/responses/PaymentRequired" },
+          "403": { "description": "The page is behind a login wall.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ScrapeError" } } } },
+          "404": { "description": "The URL does not exist (dead link / unresolvable).", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ScrapeError" } } } },
+          "422": { "description": "The page could not be converted to readable content.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ScrapeError" } } } },
+          "502": { "description": "The origin site returned a server error.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ScrapeError" } } } }
+        }
+      }
+    },
+    "/v1/api/scrape/async": {
+      "post": {
+        "tags": ["Scrape"],
+        "summary": "Scrape a URL (asynchronous)",
+        "description": "Enqueue a scrape and receive the result via a webhook callback. Best for batch ingestion. Billed once per successful scrape when the job completes.",
+        "operationId": "scrapeAsync",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AsyncScrapeRequest" },
+              "example": { "url": "https://example.com", "callbackUrl": "https://your-app.com/webhooks/scrape" }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Job accepted.",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "jobId": { "type": "string" }, "status": { "type": "string", "enum": ["queued"] } }, "required": ["jobId", "status"] } } }
+          },
+          "400": { "$ref": "#/components/responses/InvalidRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "402": { "$ref": "#/components/responses/PaymentRequired" }
+        }
+      }
+    },
+    "/v1/api/invalidate": {
+      "post": {
+        "tags": ["Scrape"],
+        "summary": "Invalidate a cached URL",
+        "description": "Drop a URL from the cache so the next scrape fetches a fresh copy.",
+        "operationId": "invalidate",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "properties": { "url": { "type": "string", "format": "uri" } }, "required": ["url"] }, "example": { "url": "https://example.com" } } }
+        },
+        "responses": {
+          "200": { "description": "Invalidated.", "content": { "application/json": { "schema": { "type": "object", "required": ["ok"], "properties": { "ok": { "type": "boolean" } } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/v1/api/monitors": {
+      "get": {
+        "tags": ["Monitoring"],
+        "summary": "List monitors",
+        "operationId": "listMonitors",
+        "responses": {
+          "200": { "description": "Customer monitors.", "content": { "application/json": { "schema": { "type": "object", "required": ["monitors"], "properties": { "monitors": { "type": "array", "items": { "$ref": "#/components/schemas/Monitor" } } } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "tags": ["Monitoring"],
+        "summary": "Create a monitor",
+        "description": "Creates a recurring public-page monitor. The first successful check establishes a baseline and does not notify.",
+        "operationId": "createMonitor",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateMonitorRequest" },
+              "example": { "url": "https://example.com/pricing", "notifications": { "email": true } }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Monitor created.", "content": { "application/json": { "schema": { "type": "object", "required": ["monitor"], "properties": { "monitor": { "$ref": "#/components/schemas/Monitor" }, "webhookSecret": { "type": "string", "description": "Generated webhook signing secret. Returned once." } } } } } },
+          "400": { "$ref": "#/components/responses/InvalidRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "402": { "$ref": "#/components/responses/PaymentRequired" }
+        }
+      }
+    },
+    "/v1/api/monitors/{id}": {
+      "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+      "get": {
+        "tags": ["Monitoring"],
+        "summary": "Get a monitor",
+        "operationId": "getMonitor",
+        "responses": {
+          "200": { "description": "Monitor details.", "content": { "application/json": { "schema": { "type": "object", "required": ["monitor"], "properties": { "monitor": { "$ref": "#/components/schemas/Monitor" } } } } } },
+          "404": { "description": "Monitor not found." }
+        }
+      },
+      "patch": {
+        "tags": ["Monitoring"],
+        "summary": "Pause or resume a monitor",
+        "operationId": "updateMonitor",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string", "enum": ["active", "paused"] } } } } } },
+        "responses": {
+          "200": { "description": "Updated monitor.", "content": { "application/json": { "schema": { "type": "object", "required": ["monitor"], "properties": { "monitor": { "$ref": "#/components/schemas/Monitor" } } } } } },
+          "404": { "description": "Monitor not found." }
+        }
+      },
+      "delete": {
+        "tags": ["Monitoring"],
+        "summary": "Delete a monitor",
+        "operationId": "deleteMonitor",
+        "responses": {
+          "204": { "description": "Monitor deleted." },
+          "404": { "description": "Monitor not found." }
+        }
+      }
+    },
+    "/v1/api/monitors/{id}/run": {
+      "post": {
+        "tags": ["Monitoring"],
+        "summary": "Run a monitor now",
+        "operationId": "runMonitor",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "202": { "description": "Check queued.", "content": { "application/json": { "schema": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string", "enum": ["queued"] } } } } } },
+          "404": { "description": "Monitor not found or paused." }
+        }
+      }
+    },
+    "/v1/api/monitors/{id}/checks": {
+      "get": {
+        "tags": ["Monitoring"],
+        "summary": "List monitor checks",
+        "operationId": "listMonitorChecks",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Recent check history.", "content": { "application/json": { "schema": { "type": "object", "required": ["checks"], "properties": { "checks": { "type": "array", "items": { "$ref": "#/components/schemas/MonitorCheck" } } } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/v1/api/monitors/{id}/events": {
+      "get": {
+        "tags": ["Monitoring"],
+        "summary": "List detected changes",
+        "operationId": "listMonitorEvents",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Recent change events and diff summaries.", "content": { "application/json": { "schema": { "type": "object", "required": ["events"], "properties": { "events": { "type": "array", "items": { "$ref": "#/components/schemas/MonitorEvent" } } } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "description": "Your API key as a Bearer token: `Authorization: Bearer <api-key>`." },
+      "apiKeyAuth": { "type": "apiKey", "in": "header", "name": "x-api-key", "description": "Legacy header alternative to the Bearer token." }
+    },
+    "schemas": {
+      "ScrapeRequest": {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url": { "type": "string", "format": "uri", "description": "The URL to scrape." },
+          "forceFresh": { "type": "boolean", "description": "Bypass the cache and fetch a fresh copy." },
+          "timeoutMs": { "type": "integer", "minimum": 1000, "maximum": 120000, "description": "Per-request timeout in milliseconds." },
+          "waitForSelector": { "type": "string", "description": "Wait for this CSS selector before extracting dynamic content." },
+          "extraWaitMs": { "type": "integer", "minimum": 0, "maximum": 10000, "description": "Additional settle time for dynamic content, in milliseconds." }
+        }
+      },
+      "AsyncScrapeRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ScrapeRequest" },
+          {
+            "type": "object",
+            "required": ["callbackUrl"],
+            "properties": {
+              "callbackUrl": { "type": "string", "format": "uri", "description": "URL the worker POSTs the result to when done." },
+              "callbackToken": { "type": "string", "maxLength": 256, "description": "Opaque token echoed back as the x-callback-token header." }
+            }
+          }
+        ]
+      },
+      "ScrapeResult": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string" },
+          "finalUrl": { "type": "string", "description": "The URL after redirects." },
+          "title": { "type": ["string", "null"] },
+          "markdown": { "type": "string", "description": "The readable page content as markdown." },
+          "html": { "type": "string" },
+          "contentLength": { "type": "integer" },
+          "fetchedAt": { "type": "string", "format": "date-time" },
+          "cached": { "type": "boolean", "description": "True if served from cache." }
+        },
+        "required": ["url", "finalUrl", "markdown", "contentLength", "fetchedAt", "cached"]
+      },
+      "ScrapeError": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string", "description": "Machine-readable error code.", "examples": ["URL_NOT_FOUND", "AUTH_REQUIRED", "ORIGIN_ERROR", "SCRAPE_FAILED"] },
+          "message": { "type": "string" },
+          "url": { "type": "string" }
+        },
+        "required": ["error", "message"]
+      },
+      "CreateMonitorRequest": {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url": { "type": "string", "format": "uri" },
+          "notifications": {
+            "type": "object",
+            "properties": {
+              "email": { "type": "boolean", "default": true },
+              "webhook": {
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                  "url": { "type": "string", "format": "uri" },
+                  "secret": { "type": "string", "minLength": 16, "maxLength": 256 }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Monitor": {
+        "type": "object",
+        "required": ["id", "url", "status", "lastCheckedAt", "lastChangedAt", "consecutiveFailures", "createdAt", "updatedAt", "channels"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "url": { "type": "string", "format": "uri" },
+          "status": { "type": "string", "enum": ["active", "paused"] },
+          "lastCheckedAt": { "type": ["string", "null"], "format": "date-time" },
+          "lastChangedAt": { "type": ["string", "null"], "format": "date-time" },
+          "consecutiveFailures": { "type": "integer" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "type", "destination", "enabled"],
+              "properties": {
+                "id": { "type": "string", "format": "uuid" },
+                "type": { "type": "string", "enum": ["email", "webhook"] },
+                "destination": { "type": "string" },
+                "enabled": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      },
+      "MonitorCheck": {
+        "type": "object",
+        "required": ["id", "monitorId", "outcome", "scrapeTier", "durationMs", "errorCode", "errorMessage", "checkedAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "monitorId": { "type": "string", "format": "uuid" },
+          "outcome": { "type": "string", "enum": ["baseline", "unchanged", "changed", "error"] },
+          "scrapeTier": { "type": ["string", "null"] },
+          "durationMs": { "type": ["integer", "null"] },
+          "errorCode": { "type": ["string", "null"] },
+          "errorMessage": { "type": ["string", "null"] },
+          "checkedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "DiffSummary": {
+        "type": "object",
+        "required": ["addedLines", "removedLines", "addedCount", "removedCount"],
+        "properties": {
+          "addedLines": { "type": "array", "items": { "type": "string" } },
+          "removedLines": { "type": "array", "items": { "type": "string" } },
+          "addedCount": { "type": "integer" },
+          "removedCount": { "type": "integer" }
+        }
+      },
+      "MonitorEvent": {
+        "type": "object",
+        "required": ["id", "monitorId", "summary", "detectedAt", "previousTitle", "currentTitle", "previousHash", "currentHash"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "monitorId": { "type": "string", "format": "uuid" },
+          "summary": { "$ref": "#/components/schemas/DiffSummary" },
+          "detectedAt": { "type": "string", "format": "date-time" },
+          "previousTitle": { "type": ["string", "null"] },
+          "currentTitle": { "type": ["string", "null"] },
+          "previousHash": { "type": ["string", "null"] },
+          "currentHash": { "type": "string" }
+        }
+      }
+    },
+    "responses": {
+      "InvalidRequest": { "description": "The request body failed validation.", "content": { "application/json": { "schema": { "type": "object", "properties": { "error": { "type": "string", "enum": ["invalid_request"] }, "details": { "type": "object" } } } } } },
+      "Unauthorized": { "description": "Missing or invalid API key.", "content": { "application/json": { "schema": { "type": "object", "properties": { "error": { "type": "string", "enum": ["unauthorized"] }, "message": { "type": "string" } } } } } },
+      "PaymentRequired": { "description": "No active subscription or usage allowance remaining.", "content": { "application/json": { "schema": { "type": "object", "properties": { "error": { "type": "string", "enum": ["payment_required"] }, "message": { "type": "string" } } } } } }
+    }
+  }
+}
