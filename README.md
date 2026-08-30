@@ -43,6 +43,29 @@ const job = await pagepith.scrapeAsync({
 await pagepith.invalidate({ url: 'https://example.com/pricing' });
 ```
 
+## Video processing
+
+Process public YouTube, Instagram, and TikTok videos asynchronously:
+
+```ts
+const accepted = await pagepith.videos.process({
+  url: 'https://www.youtube.com/watch?v=y_BFhK5ixeE',
+  mode: 'auto',
+  language: 'en',
+});
+
+const job = await pagepith.videos.getJob(accepted.jobId);
+
+if (job.status === 'completed') {
+  console.log(job.result?.transcript.text);
+}
+```
+
+`auto` prefers native captions and generates a transcript when captions are unavailable. Native
+and cached transcripts cost one credit; fresh generated transcripts cost four credits per
+rounded-up audio minute. Poll `getJob` until the job is `completed` or `failed`, or supply a public
+`callbackUrl` when starting the job.
+
 ## Monitoring
 
 ```ts
@@ -105,6 +128,7 @@ The SDK does not automatically retry requests. Callers retain control over retry
 ## API surface
 
 - `scrape`, `scrapeAsync`, `invalidate`
+- `videos.process`, `videos.getJob`
 - `monitors.create`, `list`, `get`, `update`, `delete`, `run`, `listChecks`, `listEvents`
 
 ## Development and releases

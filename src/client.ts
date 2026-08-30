@@ -5,17 +5,20 @@ import type {
   CreateMonitorRequest,
   CreateMonitorResponse,
   GetMonitorResponse,
+  GetVideoJobResponse,
   InvalidateResponse,
   ListMonitorChecksResponse,
   ListMonitorEventsResponse,
   ListMonitorsResponse,
   PagePithOptions,
+  ProcessVideoResponse,
   RequestOptions,
   RunMonitorResponse,
   ScrapeRequest,
   ScrapeResult,
   UpdateMonitorRequest,
   UpdateMonitorResponse,
+  VideoProcessRequest,
 } from './types.js';
 
 const DEFAULT_BASE_URL = 'https://api.pagepith.com';
@@ -44,6 +47,11 @@ function errorCode(body: unknown, fallback: string): string {
 
 /** Fully typed client for the PagePith HTTP API. */
 export class PagePith {
+  readonly videos: {
+    process: (input: VideoProcessRequest, options?: RequestOptions) => Promise<ProcessVideoResponse>;
+    getJob: (jobId: string, options?: RequestOptions) => Promise<GetVideoJobResponse>;
+  };
+
   readonly monitors: {
     create: (input: CreateMonitorRequest, options?: RequestOptions) => Promise<CreateMonitorResponse>;
     list: (options?: RequestOptions) => Promise<ListMonitorsResponse>;
@@ -79,6 +87,16 @@ export class PagePith {
     this.fetchImpl = fetchImpl;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.defaultHeaders = new Headers(options.headers);
+
+    this.videos = {
+      process: (input, requestOptions) => this.request('/v1/api/video/process', {
+        method: 'POST', body: input, auth: true, options: requestOptions,
+      }),
+      getJob: (jobId, requestOptions) => this.request(
+        `/v1/api/video/jobs/${encodeURIComponent(jobId)}`,
+        { auth: true, options: requestOptions },
+      ),
+    };
 
     this.monitors = {
       create: (input, requestOptions) => this.request('/v1/api/monitors', {
