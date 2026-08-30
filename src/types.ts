@@ -4,6 +4,14 @@ export type ScrapeRequest = components['schemas']['ScrapeRequest'];
 export type AsyncScrapeRequest = components['schemas']['AsyncScrapeRequest'];
 export type ScrapeResult = components['schemas']['ScrapeResult'];
 export type ScrapeError = components['schemas']['ScrapeError'];
+type GeneratedVideoProcessRequest = components['schemas']['VideoProcessRequest'];
+export type VideoProcessRequest = Omit<GeneratedVideoProcessRequest, 'mode'> & {
+  mode?: GeneratedVideoProcessRequest['mode'];
+};
+export type VideoJobAccepted = components['schemas']['VideoJobAccepted'];
+export type VideoTranscriptSegment = components['schemas']['VideoTranscriptSegment'];
+export type VideoResult = components['schemas']['VideoResult'];
+export type VideoJob = components['schemas']['VideoJob'];
 export type CreateMonitorRequest = components['schemas']['CreateMonitorRequest'];
 export type Monitor = components['schemas']['Monitor'];
 export type MonitorCheck = components['schemas']['MonitorCheck'];
@@ -12,6 +20,10 @@ export type DiffSummary = components['schemas']['DiffSummary'];
 
 export type AsyncScrapeResponse =
   paths['/v1/api/scrape/async']['post']['responses'][202]['content']['application/json'];
+export type ProcessVideoResponse =
+  paths['/v1/api/video/process']['post']['responses'][202]['content']['application/json'];
+export type GetVideoJobResponse =
+  paths['/v1/api/video/jobs/{jobId}']['get']['responses'][200]['content']['application/json'];
 export type InvalidateResponse =
   paths['/v1/api/invalidate']['post']['responses'][200]['content']['application/json'];
 export type ListMonitorsResponse =
@@ -43,7 +55,7 @@ export interface RequestOptions {
 }
 
 export interface PagePithOptions {
-  /** PagePith API key. Required by scraping, invalidation, and monitoring methods. */
+  /** PagePith API key. Required by scraping, video, invalidation, and monitoring methods. */
   apiKey?: string;
   /** API origin. Defaults to https://api.pagepith.com. */
   baseUrl?: string;

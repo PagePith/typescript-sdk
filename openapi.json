@@ -9,7 +9,9 @@
   "security": [{ "bearerAuth": [] }],
   "tags": [
     { "name": "Scrape", "description": "Fetch and convert web pages" },
-    { "name": "Monitoring", "description": "Watch public pages for content changes" }
+    { "name": "Video", "description": "Transcribe public YouTube, Instagram, and TikTok videos" },
+    { "name": "Monitoring", "description": "Watch public pages for content changes" },
+    { "name": "Blog", "description": "Read published PagePith engineering articles" }
   ],
   "paths": {
     "/v1/api/scrape": {
@@ -30,15 +32,37 @@
         "responses": {
           "200": {
             "description": "The scraped page.",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ScrapeResult" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ScrapeResult" } }
+            }
           },
           "400": { "$ref": "#/components/responses/InvalidRequest" },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "402": { "$ref": "#/components/responses/PaymentRequired" },
-          "403": { "description": "The page is behind a login wall.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ScrapeError" } } } },
-          "404": { "description": "The URL does not exist (dead link / unresolvable).", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ScrapeError" } } } },
-          "422": { "description": "The page could not be converted to readable content.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ScrapeError" } } } },
-          "502": { "description": "The origin site returned a server error.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ScrapeError" } } } }
+          "403": {
+            "description": "The page is behind a login wall.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ScrapeError" } }
+            }
+          },
+          "404": {
+            "description": "The URL does not exist (dead link / unresolvable).",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ScrapeError" } }
+            }
+          },
+          "422": {
+            "description": "The page could not be converted to readable content.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ScrapeError" } }
+            }
+          },
+          "502": {
+            "description": "The origin site returned a server error.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ScrapeError" } }
+            }
+          }
         }
       }
     },
@@ -53,18 +77,93 @@
           "content": {
             "application/json": {
               "schema": { "$ref": "#/components/schemas/AsyncScrapeRequest" },
-              "example": { "url": "https://example.com", "callbackUrl": "https://your-app.com/webhooks/scrape" }
+              "example": {
+                "url": "https://example.com",
+                "callbackUrl": "https://your-app.com/webhooks/scrape"
+              }
             }
           }
         },
         "responses": {
           "202": {
             "description": "Job accepted.",
-            "content": { "application/json": { "schema": { "type": "object", "properties": { "jobId": { "type": "string" }, "status": { "type": "string", "enum": ["queued"] } }, "required": ["jobId", "status"] } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jobId": { "type": "string" },
+                    "status": { "type": "string", "enum": ["queued"] }
+                  },
+                  "required": ["jobId", "status"]
+                }
+              }
+            }
           },
           "400": { "$ref": "#/components/responses/InvalidRequest" },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "402": { "$ref": "#/components/responses/PaymentRequired" }
+        }
+      }
+    },
+    "/v1/api/video/process": {
+      "post": {
+        "tags": ["Video"],
+        "summary": "Queue video processing",
+        "description": "Queue transcript and metadata processing for a public YouTube, Instagram, or TikTok video. Native captions cost one credit; generated transcripts cost four credits per rounded-up audio minute.",
+        "operationId": "processVideo",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/VideoProcessRequest" },
+              "example": {
+                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "mode": "auto",
+                "language": "en"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Video job accepted.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/VideoJobAccepted" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "402": { "$ref": "#/components/responses/PaymentRequired" }
+        }
+      }
+    },
+    "/v1/api/video/jobs/{jobId}": {
+      "get": {
+        "tags": ["Video"],
+        "summary": "Get a video processing job",
+        "operationId": "getVideoJob",
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current job state and, when completed, the result.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/VideoJob" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "description": "Job not found, expired, or owned by another customer." }
         }
       }
     },
@@ -76,10 +175,30 @@
         "operationId": "invalidate",
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "type": "object", "properties": { "url": { "type": "string", "format": "uri" } }, "required": ["url"] }, "example": { "url": "https://example.com" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "url": { "type": "string", "format": "uri" } },
+                "required": ["url"]
+              },
+              "example": { "url": "https://example.com" }
+            }
+          }
         },
         "responses": {
-          "200": { "description": "Invalidated.", "content": { "application/json": { "schema": { "type": "object", "required": ["ok"], "properties": { "ok": { "type": "boolean" } } } } } },
+          "200": {
+            "description": "Invalidated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["ok"],
+                  "properties": { "ok": { "type": "boolean" } }
+                }
+              }
+            }
+          },
           "401": { "$ref": "#/components/responses/Unauthorized" }
         }
       }
@@ -90,7 +209,23 @@
         "summary": "List monitors",
         "operationId": "listMonitors",
         "responses": {
-          "200": { "description": "Customer monitors.", "content": { "application/json": { "schema": { "type": "object", "required": ["monitors"], "properties": { "monitors": { "type": "array", "items": { "$ref": "#/components/schemas/Monitor" } } } } } } },
+          "200": {
+            "description": "Customer monitors.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["monitors"],
+                  "properties": {
+                    "monitors": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Monitor" }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "401": { "$ref": "#/components/responses/Unauthorized" }
         }
       },
@@ -104,12 +239,32 @@
           "content": {
             "application/json": {
               "schema": { "$ref": "#/components/schemas/CreateMonitorRequest" },
-              "example": { "url": "https://example.com/pricing", "notifications": { "email": true } }
+              "example": {
+                "url": "https://example.com/pricing",
+                "notifications": { "email": true }
+              }
             }
           }
         },
         "responses": {
-          "201": { "description": "Monitor created.", "content": { "application/json": { "schema": { "type": "object", "required": ["monitor"], "properties": { "monitor": { "$ref": "#/components/schemas/Monitor" }, "webhookSecret": { "type": "string", "description": "Generated webhook signing secret. Returned once." } } } } } },
+          "201": {
+            "description": "Monitor created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["monitor"],
+                  "properties": {
+                    "monitor": { "$ref": "#/components/schemas/Monitor" },
+                    "webhookSecret": {
+                      "type": "string",
+                      "description": "Generated webhook signing secret. Returned once."
+                    }
+                  }
+                }
+              }
+            }
+          },
           "400": { "$ref": "#/components/responses/InvalidRequest" },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "402": { "$ref": "#/components/responses/PaymentRequired" }
@@ -117,13 +272,31 @@
       }
     },
     "/v1/api/monitors/{id}": {
-      "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string", "format": "uuid" }
+        }
+      ],
       "get": {
         "tags": ["Monitoring"],
         "summary": "Get a monitor",
         "operationId": "getMonitor",
         "responses": {
-          "200": { "description": "Monitor details.", "content": { "application/json": { "schema": { "type": "object", "required": ["monitor"], "properties": { "monitor": { "$ref": "#/components/schemas/Monitor" } } } } } },
+          "200": {
+            "description": "Monitor details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["monitor"],
+                  "properties": { "monitor": { "$ref": "#/components/schemas/Monitor" } }
+                }
+              }
+            }
+          },
           "404": { "description": "Monitor not found." }
         }
       },
@@ -131,9 +304,31 @@
         "tags": ["Monitoring"],
         "summary": "Pause or resume a monitor",
         "operationId": "updateMonitor",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string", "enum": ["active", "paused"] } } } } } },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["status"],
+                "properties": { "status": { "type": "string", "enum": ["active", "paused"] } }
+              }
+            }
+          }
+        },
         "responses": {
-          "200": { "description": "Updated monitor.", "content": { "application/json": { "schema": { "type": "object", "required": ["monitor"], "properties": { "monitor": { "$ref": "#/components/schemas/Monitor" } } } } } },
+          "200": {
+            "description": "Updated monitor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["monitor"],
+                  "properties": { "monitor": { "$ref": "#/components/schemas/Monitor" } }
+                }
+              }
+            }
+          },
           "404": { "description": "Monitor not found." }
         }
       },
@@ -152,9 +347,27 @@
         "tags": ["Monitoring"],
         "summary": "Run a monitor now",
         "operationId": "runMonitor",
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
         "responses": {
-          "202": { "description": "Check queued.", "content": { "application/json": { "schema": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string", "enum": ["queued"] } } } } } },
+          "202": {
+            "description": "Check queued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["status"],
+                  "properties": { "status": { "type": "string", "enum": ["queued"] } }
+                }
+              }
+            }
+          },
           "404": { "description": "Monitor not found or paused." }
         }
       }
@@ -164,9 +377,32 @@
         "tags": ["Monitoring"],
         "summary": "List monitor checks",
         "operationId": "listMonitorChecks",
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
         "responses": {
-          "200": { "description": "Recent check history.", "content": { "application/json": { "schema": { "type": "object", "required": ["checks"], "properties": { "checks": { "type": "array", "items": { "$ref": "#/components/schemas/MonitorCheck" } } } } } } },
+          "200": {
+            "description": "Recent check history.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["checks"],
+                  "properties": {
+                    "checks": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/MonitorCheck" }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "401": { "$ref": "#/components/responses/Unauthorized" }
         }
       }
@@ -176,18 +412,134 @@
         "tags": ["Monitoring"],
         "summary": "List detected changes",
         "operationId": "listMonitorEvents",
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
         "responses": {
-          "200": { "description": "Recent change events and diff summaries.", "content": { "application/json": { "schema": { "type": "object", "required": ["events"], "properties": { "events": { "type": "array", "items": { "$ref": "#/components/schemas/MonitorEvent" } } } } } } },
+          "200": {
+            "description": "Recent change events and diff summaries.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["events"],
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/MonitorEvent" }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/v1/api/blog/posts": {
+      "get": {
+        "tags": ["Blog"],
+        "summary": "List published blog posts",
+        "operationId": "listBlogPosts",
+        "security": [],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+          },
+          { "name": "before", "in": "query", "schema": { "type": "string", "format": "date-time" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Published posts ordered newest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["posts", "nextCursor"],
+                  "properties": {
+                    "posts": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/BlogPostSummary" }
+                    },
+                    "nextCursor": { "type": ["string", "null"], "format": "date-time" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidRequest" }
+        }
+      }
+    },
+    "/v1/api/blog/posts/{slug}": {
+      "get": {
+        "tags": ["Blog"],
+        "summary": "Get a published blog post",
+        "operationId": "getBlogPost",
+        "security": [],
+        "parameters": [
+          { "name": "slug", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Published article.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["post"],
+                  "properties": { "post": { "$ref": "#/components/schemas/BlogPost" } }
+                }
+              }
+            }
+          },
+          "404": { "description": "Article not found or not published." }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "operationId": "health",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service is up.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["status", "uptime"],
+                  "properties": { "status": { "type": "string" }, "uptime": { "type": "number" } }
+                }
+              }
+            }
+          }
         }
       }
     }
   },
   "components": {
     "securitySchemes": {
-      "bearerAuth": { "type": "http", "scheme": "bearer", "description": "Your API key as a Bearer token: `Authorization: Bearer <api-key>`." },
-      "apiKeyAuth": { "type": "apiKey", "in": "header", "name": "x-api-key", "description": "Legacy header alternative to the Bearer token." }
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Your API key as a Bearer token: `Authorization: Bearer <api-key>`."
+      },
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key",
+        "description": "Legacy header alternative to the Bearer token."
+      }
     },
     "schemas": {
       "ScrapeRequest": {
@@ -195,10 +547,26 @@
         "required": ["url"],
         "properties": {
           "url": { "type": "string", "format": "uri", "description": "The URL to scrape." },
-          "forceFresh": { "type": "boolean", "description": "Bypass the cache and fetch a fresh copy." },
-          "timeoutMs": { "type": "integer", "minimum": 1000, "maximum": 120000, "description": "Per-request timeout in milliseconds." },
-          "waitForSelector": { "type": "string", "description": "Wait for this CSS selector before extracting dynamic content." },
-          "extraWaitMs": { "type": "integer", "minimum": 0, "maximum": 10000, "description": "Additional settle time for dynamic content, in milliseconds." }
+          "forceFresh": {
+            "type": "boolean",
+            "description": "Bypass the cache and fetch a fresh copy."
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 120000,
+            "description": "Per-request timeout in milliseconds."
+          },
+          "waitForSelector": {
+            "type": "string",
+            "description": "Wait for this CSS selector before extracting dynamic content."
+          },
+          "extraWaitMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000,
+            "description": "Additional settle time for dynamic content, in milliseconds."
+          }
         }
       },
       "AsyncScrapeRequest": {
@@ -208,11 +576,119 @@
             "type": "object",
             "required": ["callbackUrl"],
             "properties": {
-              "callbackUrl": { "type": "string", "format": "uri", "description": "URL the worker POSTs the result to when done." },
-              "callbackToken": { "type": "string", "maxLength": 256, "description": "Opaque token echoed back as the x-callback-token header." }
+              "callbackUrl": {
+                "type": "string",
+                "format": "uri",
+                "description": "URL the worker POSTs the result to when done."
+              },
+              "callbackToken": {
+                "type": "string",
+                "maxLength": 256,
+                "description": "Opaque token echoed back as the x-callback-token header."
+              }
             }
           }
         ]
+      },
+      "VideoProcessRequest": {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url": { "type": "string", "format": "uri" },
+          "mode": { "type": "string", "enum": ["auto", "native", "generate"], "default": "auto" },
+          "language": { "type": "string", "description": "Preferred ISO 639-1 language." },
+          "forceFresh": { "type": "boolean" },
+          "callbackUrl": { "type": "string", "format": "uri" },
+          "callbackToken": { "type": "string", "maxLength": 256 }
+        }
+      },
+      "VideoJobAccepted": {
+        "type": "object",
+        "required": ["jobId", "status"],
+        "properties": {
+          "jobId": { "type": "string" },
+          "status": { "type": "string", "const": "queued" }
+        }
+      },
+      "VideoTranscriptSegment": {
+        "type": "object",
+        "required": ["text", "startMs", "durationMs"],
+        "properties": {
+          "text": { "type": "string" },
+          "startMs": { "type": "integer", "minimum": 0 },
+          "durationMs": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "VideoResult": {
+        "type": "object",
+        "required": [
+          "url",
+          "finalUrl",
+          "platform",
+          "platformId",
+          "durationSeconds",
+          "author",
+          "transcript",
+          "processedAt",
+          "cached",
+          "credits"
+        ],
+        "properties": {
+          "url": { "type": "string" },
+          "finalUrl": { "type": "string" },
+          "platform": { "type": "string", "enum": ["youtube", "instagram", "tiktok"] },
+          "platformId": { "type": "string" },
+          "title": { "type": ["string", "null"] },
+          "description": { "type": ["string", "null"] },
+          "author": {
+            "type": "object",
+            "required": ["displayName", "handle", "profileUrl"],
+            "properties": {
+              "displayName": { "type": ["string", "null"] },
+              "handle": { "type": ["string", "null"] },
+              "profileUrl": { "type": ["string", "null"] }
+            }
+          },
+          "durationSeconds": { "type": "integer", "minimum": 0 },
+          "thumbnailUrl": { "type": ["string", "null"] },
+          "publishedAt": { "type": ["string", "null"], "format": "date-time" },
+          "transcript": {
+            "type": "object",
+            "required": ["text", "language", "availableLanguages", "source", "segments"],
+            "properties": {
+              "text": { "type": "string" },
+              "language": { "type": ["string", "null"] },
+              "availableLanguages": { "type": "array", "items": { "type": "string" } },
+              "source": { "type": "string", "enum": ["captions", "generated"] },
+              "segments": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/VideoTranscriptSegment" }
+              }
+            }
+          },
+          "processedAt": { "type": "string", "format": "date-time" },
+          "cached": { "type": "boolean" },
+          "credits": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "VideoJob": {
+        "type": "object",
+        "required": ["jobId", "status"],
+        "properties": {
+          "jobId": { "type": "string" },
+          "status": { "type": "string", "enum": ["queued", "processing", "completed", "failed"] },
+          "progress": { "type": "number", "minimum": 0, "maximum": 100 },
+          "result": { "$ref": "#/components/schemas/VideoResult" },
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" },
+              "url": { "type": "string" }
+            }
+          }
+        }
       },
       "ScrapeResult": {
         "type": "object",
@@ -231,7 +707,11 @@
       "ScrapeError": {
         "type": "object",
         "properties": {
-          "error": { "type": "string", "description": "Machine-readable error code.", "examples": ["URL_NOT_FOUND", "AUTH_REQUIRED", "ORIGIN_ERROR", "SCRAPE_FAILED"] },
+          "error": {
+            "type": "string",
+            "description": "Machine-readable error code.",
+            "examples": ["URL_NOT_FOUND", "AUTH_REQUIRED", "ORIGIN_ERROR", "SCRAPE_FAILED"]
+          },
           "message": { "type": "string" },
           "url": { "type": "string" }
         },
@@ -260,7 +740,17 @@
       },
       "Monitor": {
         "type": "object",
-        "required": ["id", "url", "status", "lastCheckedAt", "lastChangedAt", "consecutiveFailures", "createdAt", "updatedAt", "channels"],
+        "required": [
+          "id",
+          "url",
+          "status",
+          "lastCheckedAt",
+          "lastChangedAt",
+          "consecutiveFailures",
+          "createdAt",
+          "updatedAt",
+          "channels"
+        ],
         "properties": {
           "id": { "type": "string", "format": "uuid" },
           "url": { "type": "string", "format": "uri" },
@@ -287,7 +777,16 @@
       },
       "MonitorCheck": {
         "type": "object",
-        "required": ["id", "monitorId", "outcome", "scrapeTier", "durationMs", "errorCode", "errorMessage", "checkedAt"],
+        "required": [
+          "id",
+          "monitorId",
+          "outcome",
+          "scrapeTier",
+          "durationMs",
+          "errorCode",
+          "errorMessage",
+          "checkedAt"
+        ],
         "properties": {
           "id": { "type": "string", "format": "uuid" },
           "monitorId": { "type": "string", "format": "uuid" },
@@ -311,7 +810,16 @@
       },
       "MonitorEvent": {
         "type": "object",
-        "required": ["id", "monitorId", "summary", "detectedAt", "previousTitle", "currentTitle", "previousHash", "currentHash"],
+        "required": [
+          "id",
+          "monitorId",
+          "summary",
+          "detectedAt",
+          "previousTitle",
+          "currentTitle",
+          "previousHash",
+          "currentHash"
+        ],
         "properties": {
           "id": { "type": "string", "format": "uuid" },
           "monitorId": { "type": "string", "format": "uuid" },
@@ -322,12 +830,141 @@
           "previousHash": { "type": ["string", "null"] },
           "currentHash": { "type": "string" }
         }
+      },
+      "BlogPostSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "excerpt",
+          "primaryKeyword",
+          "searchIntent",
+          "cluster",
+          "readingMinutes",
+          "publishedAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "slug": { "type": "string" },
+          "title": { "type": "string" },
+          "excerpt": { "type": "string" },
+          "primaryKeyword": { "type": "string" },
+          "searchIntent": { "type": "string" },
+          "cluster": { "type": "string" },
+          "readingMinutes": { "type": "integer" },
+          "publishedAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "BlogPost": {
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "excerpt",
+          "primaryKeyword",
+          "searchIntent",
+          "cluster",
+          "readingMinutes",
+          "publishedAt",
+          "updatedAt",
+          "status",
+          "bodyMarkdown",
+          "metaTitle",
+          "metaDescription",
+          "citations",
+          "quality",
+          "scheduledFor",
+          "publicationDate",
+          "disclosure",
+          "relatedPosts"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "slug": { "type": "string" },
+          "title": { "type": "string" },
+          "excerpt": { "type": "string" },
+          "status": { "type": "string", "enum": ["published"] },
+          "bodyMarkdown": { "type": "string" },
+          "metaTitle": { "type": "string" },
+          "metaDescription": { "type": "string" },
+          "primaryKeyword": { "type": "string" },
+          "searchIntent": { "type": "string" },
+          "cluster": { "type": "string" },
+          "readingMinutes": { "type": "integer" },
+          "publishedAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" },
+          "citations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["title", "url", "publisher", "accessedAt", "claim"],
+              "properties": {
+                "title": { "type": "string" },
+                "url": { "type": "string", "format": "uri" },
+                "publisher": { "type": "string" },
+                "accessedAt": { "type": "string", "format": "date-time" },
+                "claim": { "type": "string" }
+              }
+            }
+          },
+          "quality": { "type": ["object", "null"] },
+          "scheduledFor": { "type": ["string", "null"], "format": "date-time" },
+          "publicationDate": { "type": ["string", "null"], "format": "date" },
+          "disclosure": { "type": "string" },
+          "relatedPosts": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/BlogPostSummary" }
+          }
+        }
       }
     },
     "responses": {
-      "InvalidRequest": { "description": "The request body failed validation.", "content": { "application/json": { "schema": { "type": "object", "properties": { "error": { "type": "string", "enum": ["invalid_request"] }, "details": { "type": "object" } } } } } },
-      "Unauthorized": { "description": "Missing or invalid API key.", "content": { "application/json": { "schema": { "type": "object", "properties": { "error": { "type": "string", "enum": ["unauthorized"] }, "message": { "type": "string" } } } } } },
-      "PaymentRequired": { "description": "No active subscription or usage allowance remaining.", "content": { "application/json": { "schema": { "type": "object", "properties": { "error": { "type": "string", "enum": ["payment_required"] }, "message": { "type": "string" } } } } } }
+      "InvalidRequest": {
+        "description": "The request body failed validation.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": { "type": "string", "enum": ["invalid_request"] },
+                "details": { "type": "object" }
+              }
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Missing or invalid API key.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": { "type": "string", "enum": ["unauthorized"] },
+                "message": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "PaymentRequired": {
+        "description": "No active subscription or usage allowance remaining.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": { "type": "string", "enum": ["payment_required"] },
+                "message": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

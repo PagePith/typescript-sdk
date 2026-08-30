@@ -44,6 +44,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/api/video/process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queue video processing
+         * @description Queue transcript and metadata processing for a public YouTube, Instagram, or TikTok video. Native captions cost one credit; generated transcripts cost four credits per rounded-up audio minute.
+         */
+        post: operations["processVideo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api/video/jobs/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a video processing job */
+        get: operations["getVideoJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/api/invalidate": {
         parameters: {
             query?: never;
@@ -157,6 +194,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/api/blog/posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List published blog posts */
+        get: operations["listBlogPosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api/blog/posts/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a published blog post */
+        get: operations["getBlogPost"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Health check */
+        get: operations["health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -184,6 +272,73 @@ export interface components {
             callbackUrl: string;
             /** @description Opaque token echoed back as the x-callback-token header. */
             callbackToken?: string;
+        };
+        VideoProcessRequest: {
+            /** Format: uri */
+            url: string;
+            /**
+             * @default auto
+             * @enum {string}
+             */
+            mode: "auto" | "native" | "generate";
+            /** @description Preferred ISO 639-1 language. */
+            language?: string;
+            forceFresh?: boolean;
+            /** Format: uri */
+            callbackUrl?: string;
+            callbackToken?: string;
+        };
+        VideoJobAccepted: {
+            jobId: string;
+            /** @constant */
+            status: "queued";
+        };
+        VideoTranscriptSegment: {
+            text: string;
+            startMs: number;
+            durationMs: number;
+        };
+        VideoResult: {
+            url: string;
+            finalUrl: string;
+            /** @enum {string} */
+            platform: "youtube" | "instagram" | "tiktok";
+            platformId: string;
+            title?: string | null;
+            description?: string | null;
+            author: {
+                displayName: string | null;
+                handle: string | null;
+                profileUrl: string | null;
+            };
+            durationSeconds: number;
+            thumbnailUrl?: string | null;
+            /** Format: date-time */
+            publishedAt?: string | null;
+            transcript: {
+                text: string;
+                language: string | null;
+                availableLanguages: string[];
+                /** @enum {string} */
+                source: "captions" | "generated";
+                segments: components["schemas"]["VideoTranscriptSegment"][];
+            };
+            /** Format: date-time */
+            processedAt: string;
+            cached: boolean;
+            credits: number;
+        };
+        VideoJob: {
+            jobId: string;
+            /** @enum {string} */
+            status: "queued" | "processing" | "completed" | "failed";
+            progress?: number;
+            result?: components["schemas"]["VideoResult"];
+            error?: {
+                code: string;
+                message: string;
+                url?: string;
+            };
         };
         ScrapeResult: {
             url: string;
@@ -281,6 +436,57 @@ export interface components {
             currentTitle: string | null;
             previousHash: string | null;
             currentHash: string;
+        };
+        BlogPostSummary: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            title: string;
+            excerpt: string;
+            primaryKeyword: string;
+            searchIntent: string;
+            cluster: string;
+            readingMinutes: number;
+            /** Format: date-time */
+            publishedAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        BlogPost: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            title: string;
+            excerpt: string;
+            /** @enum {string} */
+            status: "published";
+            bodyMarkdown: string;
+            metaTitle: string;
+            metaDescription: string;
+            primaryKeyword: string;
+            searchIntent: string;
+            cluster: string;
+            readingMinutes: number;
+            /** Format: date-time */
+            publishedAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            citations: {
+                title: string;
+                /** Format: uri */
+                url: string;
+                publisher: string;
+                /** Format: date-time */
+                accessedAt: string;
+                claim: string;
+            }[];
+            quality: Record<string, never> | null;
+            /** Format: date-time */
+            scheduledFor: string | null;
+            /** Format: date */
+            publicationDate: string | null;
+            disclosure: string;
+            relatedPosts: components["schemas"]["BlogPostSummary"][];
         };
     };
     responses: {
@@ -434,6 +640,70 @@ export interface operations {
             400: components["responses"]["InvalidRequest"];
             401: components["responses"]["Unauthorized"];
             402: components["responses"]["PaymentRequired"];
+        };
+    };
+    processVideo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                 *       "mode": "auto",
+                 *       "language": "en"
+                 *     }
+                 */
+                "application/json": components["schemas"]["VideoProcessRequest"];
+            };
+        };
+        responses: {
+            /** @description Video job accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoJobAccepted"];
+                };
+            };
+            400: components["responses"]["InvalidRequest"];
+            401: components["responses"]["Unauthorized"];
+            402: components["responses"]["PaymentRequired"];
+        };
+    };
+    getVideoJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current job state and, when completed, the result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoJob"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Job not found, expired, or owned by another customer. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     invalidate: {
@@ -709,6 +979,88 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    listBlogPosts: {
+        parameters: {
+            query?: {
+                limit?: number;
+                before?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Published posts ordered newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        posts: components["schemas"]["BlogPostSummary"][];
+                        /** Format: date-time */
+                        nextCursor: string | null;
+                    };
+                };
+            };
+            400: components["responses"]["InvalidRequest"];
+        };
+    };
+    getBlogPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Published article. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        post: components["schemas"]["BlogPost"];
+                    };
+                };
+            };
+            /** @description Article not found or not published. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    health: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Service is up. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status: string;
+                        uptime: number;
+                    };
+                };
+            };
         };
     };
 }

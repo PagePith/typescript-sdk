@@ -61,7 +61,8 @@ describe('PagePith', () => {
       json({ error: 'URL_NOT_FOUND', message: 'The URL does not exist.' }, 404),
       new Response('Bad gateway', { status: 502 }),
     ];
-    const fetchMock = vi.fn(async () => responses.shift()!);
+    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
+      responses.shift()!);
     const client = new PagePith({ apiKey: 'secret', fetch: fetchMock as typeof fetch });
 
     await expect(client.scrape({ url: 'https://example.com/missing' })).rejects.toMatchObject({
@@ -106,6 +107,37 @@ describe('PagePith', () => {
       ['https://api.example.test/v1/api/monitors/id%2Fwith%20spaces/checks', 'GET'],
       ['https://api.example.test/v1/api/monitors/id%2Fwith%20spaces/events', 'GET'],
     ]);
+  });
+
+  it('processes videos and polls jobs through the documented endpoints', async () => {
+    const responses = [
+      json({ jobId: 'job-1', status: 'queued' }, 202),
+      json({ jobId: 'job-1', status: 'processing', progress: 50 }),
+    ];
+    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
+      responses.shift()!);
+    const client = new PagePith({
+      apiKey: 'secret',
+      baseUrl: 'https://api.example.test',
+      fetch: fetchMock as typeof fetch,
+    });
+
+    const accepted = await client.videos.process({
+      url: 'https://www.youtube.com/watch?v=y_BFhK5ixeE',
+      language: 'en',
+    });
+    const job = await client.videos.getJob('job/with spaces');
+
+    expect(accepted).toEqual({ jobId: 'job-1', status: 'queued' });
+    expect(job).toMatchObject({ jobId: 'job-1', status: 'processing', progress: 50 });
+    expect(fetchMock.mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
+      ['https://api.example.test/v1/api/video/process', 'POST'],
+      ['https://api.example.test/v1/api/video/jobs/job%2Fwith%20spaces', 'GET'],
+    ]);
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      url: 'https://www.youtube.com/watch?v=y_BFhK5ixeE',
+      language: 'en',
+    });
   });
 
   it('supports caller cancellation and client timeouts', async () => {
